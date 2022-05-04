@@ -6,7 +6,7 @@ from messenger_backend.models import Conversation, Message
 from online_users import online_users
 from rest_framework.views import APIView
 from rest_framework.request import Request
-
+import logging
 
 class Conversations(APIView):
     """get all conversations for a user, include latest message text for preview, and all messages
@@ -37,20 +37,23 @@ class Conversations(APIView):
                 convo_dict = {
                     "id": convo.id,
                     "messages": [
-                        message.to_dict(["id", "text", "senderId", "createdAt"])
+                        message.to_dict(["id", "text", "senderId", "createdAt", "isRead"])
                         for message in convo.messages.all()
                     ],
                 }
 
                 # set properties for notification count and latest message preview
                 convo_dict["latestMessageText"] = convo_dict["messages"][-1]["text"]
+                convo_dict["notificationCount"] = 0
 
                 # set a property "otherUser" so that frontend will have easier access
                 user_fields = ["id", "username", "photoUrl"]
                 if convo.user1 and convo.user1.id != user_id:
                     convo_dict["otherUser"] = convo.user1.to_dict(user_fields)
+                    convo_dict["notificationCount"] = convo.messages.filter(senderId=convo.user1.id, isRead=False).count()
                 elif convo.user2 and convo.user2.id != user_id:
                     convo_dict["otherUser"] = convo.user2.to_dict(user_fields)
+                    convo_dict["notificationCount"] = convo.messages.filter(senderId=convo.user2.id, isRead=False).count()
 
                 # set property for online status of the other user
                 if convo_dict["otherUser"]["id"] in online_users:
@@ -68,4 +71,5 @@ class Conversations(APIView):
                 safe=False,
             )
         except Exception as e:
+            logging.exception(e)
             return HttpResponse(status=500)

@@ -61,9 +61,20 @@ const Home = ({ user, logout }) => {
       sender: data.sender,
     });
   };
+  //
+  const readMessage = async (body) => {
+    await axios.put("/api/messages", body);
+  }
 
   const postMessage = async (body) => {
     try {
+      if (activeConversation) {
+        if (body.conversationId === activeConversation.id && body.recipientId !== activeConversation.otherUser.id) {
+          body["isRead"] = true;
+        } else {
+          body["isRead"] = false;
+        }
+      }
       const data = await saveMessage(body);
 
       if (!body.conversationId) {
@@ -108,13 +119,22 @@ const Home = ({ user, logout }) => {
           messages: [message],
         };
         newConvo.latestMessageText = message.text;
+        newConvo.notificationCount = 1;
         setConversations((prev) => [newConvo, ...prev]);
       }
-
+      else {
       setConversations((prev) =>
         prev.map((convo) => {
           if (convo.id === message.conversationId) {
             const convoCopy = { ...convo };
+            if (!message.isRead && message.senderId === convo.otherUser.id) {
+              if (!activeConversation || activeConversation.id !== convo.id) {
+                convoCopy.notificationCount += 1;
+              } else {
+                message.isRead = true
+                readMessage(message)
+              }
+            }
             convoCopy.messages = [...convo.messages, message];
             convoCopy.latestMessageText = message.text;
             return convoCopy;
@@ -123,12 +143,32 @@ const Home = ({ user, logout }) => {
           }
         })
       );
+    }
     },
-    [],
+    [activeConversation],
   );
 
-  const setActiveChat = (username) => {
-    setActiveConversation(username);
+  const setActiveChat = (conversation) => {
+    setActiveConversation(conversation);
+
+    setConversations((prev) =>
+      prev.map((convo) => {
+        if (convo.id === conversation.id) {
+          const convoCopy = { ...convo };
+          convoCopy.messages = [...convo.messages];
+          convoCopy.messages.forEach((message) => {
+            if (message.isRead === false && message.senderId === convo.otherUser.id) {
+              message.isRead = true;
+              readMessage(message);
+            }
+          });
+          convoCopy.notificationCount = 0;
+          return convoCopy;
+        } else {
+          return convo;
+        }
+      })
+    );
   };
 
   const addOnlineUser = useCallback((id) => {
