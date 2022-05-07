@@ -51,7 +51,7 @@ class Messages(APIView):
             logging.exception(e)
             return HttpResponse(status=500)
 
-    """Expects existing message data, so id, isRead, text."""
+    """Expects array of existing messages"""
     def put(self, request):
         try:
             user = get_user(request)
@@ -59,20 +59,22 @@ class Messages(APIView):
             if user.is_anonymous:
                 return HttpResponse(status=401)
 
-            sender_id = user.id
-            body = request.data
-            messageId = body.get("id")
-            if messageId == None:
-                return HttpResponse(status=400)
-            text = body.get("text")
-            isRead = body.get("isRead")
+            messages_list = request.data
+            # Authorization validation
+            sender_id = messages_list[0].get('senderId')
+            if (sender_id != user.id):
+                return HttpResponse(status=403)
 
-            message = Message.objects.get(id=messageId)
-            message.text = text
-            message.isRead = isRead
-            message.save()
-            message_json = message.to_dict()
-            return JsonResponse({"message": message_json})
+            for message in messages_list:
+                message_id = message.get('id')
+                text = message.get('text')
+                isRead = message.get('isRead')
+                message_to_update = Message.objects.get(id=message_id)
+                message_to_update.text = text
+                message_to_update.isRead = isRead
+                message_to_update.save()
+
+            return HttpResponse(status=204)
         except Exception as e:
             logging.exception(e)
             return HttpResponse(status=500)
